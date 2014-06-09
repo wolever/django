@@ -38,14 +38,20 @@ from __future__ import unicode_literals
 import base64
 import json
 import time
+import warnings
 import zlib
 
 from django.conf import settings
 from django.utils import baseconv
+from django.utils.deprecation import RemovedInNextVersionWarning
 from django.utils.crypto import constant_time_compare, salted_hmac
 from django.utils.encoding import force_bytes, force_str, force_text
 from django.utils.module_loading import import_string
 
+_SEP_UNSAFE = set(
+    "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    "abcdefghijklmnopqrstuvwxyz-_="
+)
 
 class BadSignature(Exception):
     """
@@ -150,6 +156,16 @@ class Signer(object):
     def __init__(self, key=None, sep=':', salt=None):
         # Use of native strings in all versions of Python
         self.sep = force_str(sep)
+        sep_is_invalid = sep != ":" and (
+            not self.sep or
+            self.sep[0] in _SEP_UNSAFE or
+            self.sep[-1] in _SEP_UNSAFE
+        )
+        if sep_is_invalid:
+            warnings.warn(
+                "Unsafe Signer separator: %r (cannot be in %r)"
+                % (self.sep, "".join(_SEP_UNSAFE)),
+                RemovedInNextVersionWarning)
         self.key = key or settings.SECRET_KEY
         self.salt = force_str(salt or
             '%s.%s' % (self.__class__.__module__, self.__class__.__name__))
